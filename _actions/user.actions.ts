@@ -1,5 +1,11 @@
 "use server"
 
+import { getCollection } from "../_lib/mongoConnect";
+import bcrypt from "bcrypt"
+import jwt from "jsonwebtoken"
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+
 type ErrorType = {
     [key: string]: string | number;
 }
@@ -27,18 +33,101 @@ export const validateInput = async (label: string, inputValue: string,  errors: 
     if(!regex.test(inputValue)) errors[label] += ` El ${labelStr} debe contener caracteres válidos}.`
 }
 
+export const getUsers = async () => {
+    const collection = await getCollection("users")
+    const results = await collection
+      .find({})
+      .toArray()
+    return results
+  }
+
+
 export const register = async (prevState, formData: FormData) => {
     const username = formData.get("username").toString()
-    const userpassword = formData.get("userpassword").toString()
+    let userpassword = formData.get("userpassword").toString()
 
     const errors = {username: "", userpassword: ""}
 
     validateInput("username", username, errors)
+
+    const usersCollection = await getCollection("users")
+    const usernameInQuestion = await usersCollection.findOne({ username })
+
+    if (usernameInQuestion) {
+        errors.username = " El usuario ya se encuentra registrado."
+    }
+
     validateInput("userpassword", userpassword, errors)
 
     if(errors.username || errors.userpassword) {
         return {succcess: false, errors}
     }
 
+    //hash password first
+    const salt = bcrypt.genSaltSync(10)
+    userpassword = bcrypt.hashSync(userpassword, salt)
+
+    const res = await usersCollection.insertOne({username, userpassword})
+    const userId = res.insertedId.toString()
+
+    //generate token
+    const ourTokenValue = jwt.sign({ username, userId, exp: Math.floor(Date.now() / 1000) + 60}, process.env.JWTSECRET)
+
+    // log the user in by giving them a cookie
+    await cookies().set("usertoken", ourTokenValue, {
+    httpOnly: true,
+    sameSite: "strict",
+    maxAge: 60 * 60 * 24 * 100,
+    secure: true
+  })
+
+    redirect("/")
+
     return {success: true, errors}
 }
+
+export const logout = async function () {
+    cookies().delete("usertoken")
+    redirect("/")
+  }
+
+  export const login = async function (prevState, formData) {
+    const failObject = {
+      success: false,
+      errors: "Nombre o contraseña inválidos."
+    }
+  
+      let username = formData.get("username")
+      let userpassword = formData.get("userpassword")
+  
+    if (typeof username != "string") username = ""
+    if (typeof userpassword != "string") userpassword = ""
+  
+    const collection = await getCollection("users")
+    const user = await collection.findOne({ username })
+
+    if (!user) {
+      return failObject
+    }
+  
+    const matchOrNot = bcrypt.compareSync(userpassword, user.userpassword)
+  
+    if (!matchOrNot) {
+      return failObject
+    }
+  
+    // create jwt value
+    const ourTokenValue = jwt.sign({ username, userId: user._id.toString(), exp: Math.floor(Date.now() / 1000) + 60 }, process.env.JWTSECRET)
+  
+    // log the user in by giving them a cookie
+    cookies().set("usertoken", ourTokenValue, {
+      httpOnly: true,
+      sameSite: "strict",
+      maxAge: 60 * 60 * 24 * 100,
+      secure: true
+    })
+  
+     redirect("/")
+
+    return {success: true, errors: null}
+  }

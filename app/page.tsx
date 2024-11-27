@@ -1,23 +1,20 @@
-import RegisterForm from '../_components/RegisterForm'
-import { getCollection } from '../lib/mongoConnect'
-
-const getUsers = async () => {
-  const collection = await getCollection("Prueba")
-  const results = await collection
-    .find({})
-    .toArray()
-  return results
-
-}
+import LoginForm from '../_components/Auth/LoginForm'
+import RegisterForm from '../_components/Auth/RegisterForm'
+import TodoList from '../_components/Todos/TodoList'
+import getUserFromCookie from '../_lib/utils/getUser'
 
 export default async function page() {
 
-  const users = await getUsers()
-  console.log({users})
+  const user = await getUserFromCookie()
 
   return (
-    <div className="h-full flex justify-center items-center">
-        <RegisterForm />
+    <div className="h-full flex flex-col justify-center items-center">
+      {
+        user
+        ? <TodoList user={user} />
+        : <LoginForm />
+      }
+        
     </div>
   )
 }

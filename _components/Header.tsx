@@ -1,14 +1,26 @@
 import Link from 'next/link'
 import React from 'react'
+import { logout } from '../_actions/user.actions'
+import getUserFromCookie from '../_lib/utils/getUser'
 
-export default function Header() {
+export default async function Header() {
+
+  const user = await getUserFromCookie()
+
   return (
     <div className="navbar bg-base-100 px-4">
   <div className="flex-1">
-    <a className="btn btn-ghost text-xl">K@to</a>
+    <Link href={"/"} className="btn btn-ghost text-xl">K@to</Link>
   </div>
   <div className="flex-none">
-    <Link className='btn btn-primary' href="/login">Log in</Link>
+    {
+      user
+     
+     && <form action={logout}>
+          <button className='btn btn-primary'>{user.username}</button>
+        </form>
+      
+    }
   </div>
 </div>
   )
